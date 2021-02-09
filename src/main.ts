@@ -20,6 +20,10 @@ http.createServer(function (req, res) {
             });
             req.on("end", () => {
                 game.turn(direction as Direction);
+                if (game.over) {
+                    console.log(game.toString());
+                    console.log("---------------");
+                }
                 res.writeHead(200, { "Content-Type": "text/json" });
                 res.end(game.toJson());
             });

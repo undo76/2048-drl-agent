@@ -7,37 +7,39 @@ from dqn_agent import Agent
 from model import QNetwork
 
 
-def _board_to_numpy(board):
-    a1 = np.array([[e['value'] if e is not None else 1 for e in r] for r in board])
-    return np.vstack([a1 == 2 ** i for i in range(16)]).reshape(16, 4, 4) * 1
-
-    # return np.array([[e['value'] if e is not None else 0 for e in r] for r in board])
-
-
 class Env:
     ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT']
 
     def __init__(self, protocol="http", host="localhost", port=8881):
         self.url = f"{protocol}://{host}:{port}"
         self.json = None
+        self.max_tile = 0
 
     def reset(self):
         self.json = requests.put(f"{self.url}/reset").json()
+        self.max_tile = 0
 
     def step(self, action: int):
         self.json = requests.put(f"{self.url}/action", data=Env.ACTIONS[action]).json()
 
     @property
     def state(self):
-        return _board_to_numpy(self.json['board'])
+        return self._board_to_numpy(self.json['board'])
 
     @property
     def reward(self):
         # Penalize forbidden moves
+        # if self.done:
+        #     return -10
         if self.invalid:
-            return -1
+            # return -1
+            return 0
         else:
-            return np.log2(self.json['deltaScore'] + 1)
+            # return np.log2(self.json['deltaScore'] + 1)
+            # return self.json['deltaScore']
+            # self._board_to_numpy(self.json['board'])
+            # return np.log2(self.max_tile) + np.log2(self.json['deltaScore'] + 1)
+            return 1
 
     @property
     def done(self):
@@ -54,6 +56,11 @@ class Env:
     @property
     def human(self):
         return self.json['humanBoard']
+
+    def _board_to_numpy(self, board):
+        a1 = np.array([[e['value'] if e is not None else 0 for e in r] for r in board])
+        self.max_tile = a1.max()
+        return np.vstack([a1 == 2 ** i for i in range(1,17)]).reshape((16, 4, 4)) * 1
 
 
 def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
@@ -91,25 +98,31 @@ def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, e
         scores.append(score)  # save most recent score
         eps = max(eps_end, eps_decay * eps)  # decrease epsilon
         print(
-            '\rEpisode {}\tScore: {}/{:.2f}\tAverage Score: {:.2f}\teps: {:.2f} \t   stp: {}   \t mem: {} '
-                .format(i_episode, env.score, score, np.mean(scores_window), eps, t, len(agent.memory)), end="")
+            '\rEpisode {}\tScore: {}/{:.2f}   \tAvg: {:.2f}  \tTile: {}   \teps: {:.2f} \t   stp: {}   \t mem: {}   '
+                .format(i_episode, env.score, score, np.mean(scores_window), env.max_tile, eps, t+1, len(agent.memory)), end="")
         if i_episode % 10 == 0:
             print("")
     return scores
 
 
-env = Env()
-env.reset()
-state = env.state
+def train():
+    env = Env()
+    env.reset()
+    state = env.state
 
-# Create an agent
-agent = Agent(QNetwork, len(state), len(Env.ACTIONS), seed=42)
+    # Create an agent
+    agent = Agent(QNetwork, len(state), len(Env.ACTIONS), seed=42)
+    print(agent.__dict__)
 
-# agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
-# agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
+    agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
+    agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
 
-# Execute training
-scores = dqn(env, agent, n_episodes=1000, eps_decay=0.999, eps_start=0.05, eps_end=0.001)
+    # Execute training
+    scores = dqn(env, agent, n_episodes=1000, eps_decay=0.995, eps_start=0.05, eps_end=0.001)
 
-# Save trained parameters
-torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')
+    # Save trained parameters
+    torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')
+
+
+if __name__ == "__main__":
+    train()
