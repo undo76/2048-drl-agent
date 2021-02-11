@@ -33,13 +33,13 @@ class Env:
         #     return -10
         if self.invalid:
             # return -1
-            return 0
+            return -1
         else:
-            # return np.log2(self.json['deltaScore'] + 1)
+            return np.log2(self.json['deltaScore'] + 1)
             # return self.json['deltaScore']
             # self._board_to_numpy(self.json['board'])
             # return np.log2(self.max_tile) + np.log2(self.json['deltaScore'] + 1)
-            return 1
+            # return 1
 
     @property
     def done(self):
@@ -58,9 +58,15 @@ class Env:
         return self.json['humanBoard']
 
     def _board_to_numpy(self, board):
-        a1 = np.array([[e['value'] if e is not None else 0 for e in r] for r in board])
+        # a1 = np.array([[e['value'] if e is not None else 0 for e in r] for r in board])
+        # self.max_tile = a1.max()
+        # return np.vstack([a1 == 2 ** i for i in range(1,17)]).reshape((16, 4, 4)) * 1
+        a1 = np.array([[e['value'] if e is not None else 1 for e in r] for r in board])
         self.max_tile = a1.max()
-        return np.vstack([a1 == 2 ** i for i in range(1,17)]).reshape((16, 4, 4)) * 1
+        return np.vstack([
+            np.log2(a1).reshape(1, 4, 4),
+            np.array([a1 == 2 ** i for i in range(1, 17)]).reshape((16, 4, 4)) * 1
+        ])
 
 
 def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
@@ -98,8 +104,9 @@ def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, e
         scores.append(score)  # save most recent score
         eps = max(eps_end, eps_decay * eps)  # decrease epsilon
         print(
-            '\rEpisode {}\tScore: {}/{:.2f}   \tAvg: {:.2f}  \tTile: {}   \teps: {:.2f} \t   stp: {}   \t mem: {}   '
-                .format(i_episode, env.score, score, np.mean(scores_window), env.max_tile, eps, t+1, len(agent.memory)), end="")
+            '\rEpisode {}  \tScore: {} / {:.2f}  \tAvg: {:.2f}  \tTile: {}  \teps: {:.3f}  \tstp: {}  \tmem: {}  '
+                .format(i_episode, env.score, score, np.mean(scores_window), env.max_tile, eps, t + 1,
+                        len(agent.memory)), end="")
         if i_episode % 10 == 0:
             print("")
     return scores
@@ -118,7 +125,7 @@ def train():
     agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
 
     # Execute training
-    scores = dqn(env, agent, n_episodes=1000, eps_decay=0.995, eps_start=0.05, eps_end=0.001)
+    scores = dqn(env, agent, n_episodes=5000, eps_decay=0.999, eps_start=0.1, eps_end=0.005)
 
     # Save trained parameters
     torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')

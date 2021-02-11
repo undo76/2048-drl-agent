@@ -6,16 +6,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 # DEFAULT PARAMETERS
-BUFFER_SIZE = int(1e5)  # replay buffer size
+BUFFER_SIZE = int(2e5)  # replay buffer size
 MINIMUM_BUFFER_ENTRIES = 10_000  # Minimum entries for learning
 BATCH_SIZE = 256  # minibatch size
-GAMMA = 0.995  # discount factor
+GAMMA = 0.99  # discount factor
 TAU = 1e-2  # for soft update of target parameters
-LR = 1e-4  # learning rate
+LR = 1e-3  # learning rate
 UPDATE_EVERY = 10  # how often to update the network
 DEFAULT_PRIORITY = 10_000.0  # priority for new experiences
 PRIORITY_EPS = 0.0001  # Epsilon to add to priorities
-PRIORITY_ETA = 1.0  # Exponent for priority
+PRIORITY_ETA = 2.0  # Exponent for priority
 PRIORITY_WEIGHT_BETA = 1.0  # Exponent for the priority importance loss scaling
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

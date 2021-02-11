@@ -22,18 +22,18 @@ class QNetwork(nn.Module):
         super(QNetwork, self).__init__()
         self.seed = torch.manual_seed(seed)
 
-        self.cc1 = nn.Conv2d(16, 128, 3, padding=1)
-        self.cc2 = nn.Conv2d(128, 128, 3, padding=1)
-        self.cc3 = nn.Conv2d(128, 32, 1)
+        self.cc1 = nn.Conv2d(17, 1024, 3, padding=1)
+        self.cc2 = nn.Conv2d(1024, 256, 3, padding=1)
+        self.cc3 = nn.Conv2d(256, 32, 1)
 
         # self.cc1 = nn.Conv3d(1, 64, 3, padding=1)
         # self.cc2 = nn.Conv3d(64, 8, 3, padding=1)
         # self.cc3 = nn.Conv3d(16, 8, 3, padding=1)
 
         # Common network
-        self.fc1 = nn.Linear(4 * 4 * 32, fc1_units)
+        # self.fc1 = nn.Linear(4 * 4 * 32, fc1_units)
         # self.fc1 = nn.Linear(state_size, fc1_units)
-        self.fc2 = nn.Linear(fc1_units, fc2_units)
+        # self.fc2 = nn.Linear(fc1_units, fc2_units)
 
         # Duel network - V stream
         self.v1 = nn.Linear(fc2_units, v1_units)
@@ -58,18 +58,19 @@ class QNetwork(nn.Module):
         # fc2 = F.relu(self.fc2(fc1))
         # fc2 = F.dropout(fc2)
 
-        fc1 = F.relu(self.fc1(cc3.view(cc3.size(0), -1)))
+        fc1 = cc3.view(cc3.size(0), -1)
+        # fc1 = F.relu(self.fc1(cc3.view(cc3.size(0), -1)))
         # fc1 = F.relu(self.fc1(state.view(state.size(0), -1)))
-        fc1 = F.dropout(fc1)
-        fc2 = F.relu(self.fc2(fc1))
-        fc2 = F.dropout(fc2)
+        # fc1 = F.dropout(fc1)
+        # fc2 = F.relu(self.fc2(fc1))
+        # fc2 = F.dropout(fc2)
 
-        v1 = F.relu(self.v1(fc2))
+        v1 = F.relu(self.v1(fc1))
         v1 = F.dropout(v1)
         v2 = F.relu(self.v2(v1))
         v3 = self.v3(v2)
 
-        a1 = F.relu(self.a1(fc2))
+        a1 = F.relu(self.a1(fc1))
         a1 = F.dropout(a1)
         a2 = F.relu(self.a2(a1))
         a3 = self.a3(a2)
