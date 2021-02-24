@@ -5,6 +5,10 @@ import torch
 import requests
 from dqn_agent import Agent
 from model import QNetwork
+from rich import print
+from rich.traceback import install as install_traceback
+
+install_traceback()
 
 
 class Env:
@@ -13,33 +17,36 @@ class Env:
     def __init__(self, protocol="http", host="localhost", port=8881):
         self.url = f"{protocol}://{host}:{port}"
         self.json = None
-        self.max_tile = 0
+        self.board = None
+
+    def read(self):
+        self.json = requests.get(f"{self.url}/state").json()
+        self._read_board()
 
     def reset(self):
         self.json = requests.put(f"{self.url}/reset").json()
-        self.max_tile = 0
+        self._read_board()
 
     def step(self, action: int):
         self.json = requests.put(f"{self.url}/action", data=Env.ACTIONS[action]).json()
+        self._read_board()
 
     @property
     def state(self):
-        return self._board_to_numpy(self.json['board'])
+        """Converts board values (0, 2, 4, ..., 2 ** 16) to indexes (0, 1, ..., 16)"""
+        b = self.board.copy()
+        b[self.board == 0] = 1
+        return np.log2(b).astype(int)
 
     @property
     def reward(self):
-        # Penalize forbidden moves
-        # if self.done:
-        #     return -10
+        """Penalize forbidden moves with -1"""
+        if self.done:
+            return -10
         if self.invalid:
-            # return -1
             return -1
         else:
-            return np.log2(self.json['deltaScore'] + 1)
-            # return self.json['deltaScore']
-            # self._board_to_numpy(self.json['board'])
-            # return np.log2(self.max_tile) + np.log2(self.json['deltaScore'] + 1)
-            # return 1
+            return self.delta_score
 
     @property
     def done(self):
@@ -50,6 +57,10 @@ class Env:
         return self.json['score']
 
     @property
+    def delta_score(self):
+        return self.json['deltaScore']
+
+    @property
     def invalid(self):
         return self.json['invalid']
 
@@ -57,16 +68,12 @@ class Env:
     def human(self):
         return self.json['humanBoard']
 
-    def _board_to_numpy(self, board):
-        # a1 = np.array([[e['value'] if e is not None else 0 for e in r] for r in board])
-        # self.max_tile = a1.max()
-        # return np.vstack([a1 == 2 ** i for i in range(1,17)]).reshape((16, 4, 4)) * 1
-        a1 = np.array([[e['value'] if e is not None else 1 for e in r] for r in board])
-        self.max_tile = a1.max()
-        return np.vstack([
-            np.log2(a1).reshape(1, 4, 4),
-            np.array([a1 == 2 ** i for i in range(1, 17)]).reshape((16, 4, 4)) * 1
-        ])
+    @property
+    def max_tile(self):
+        return self.board.max()
+
+    def _read_board(self):
+        self.board = np.array([[e['value'] if e is not None else 0 for e in r] for r in self.json['board']])
 
 
 def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
@@ -80,8 +87,7 @@ def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, e
         eps_end (float): minimum value of epsilon
         eps_decay (float): multiplicative factor (per episode) for decreasing epsilon
     """
-    scores = []  # list containing scores from each episode
-    scores_window = deque(maxlen=100)  # last 100 scores
+    rolling_scores = 0
     eps = eps_start  # initialize epsilon
 
     for i_episode in range(1, n_episodes + 1):
@@ -100,16 +106,20 @@ def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, e
             score += reward
             if done:
                 break
-        scores_window.append(score)  # save most recent score
-        scores.append(score)  # save most recent score
+        rolling_scores = rolling_scores * 0.95 + score * 0.05
         eps = max(eps_end, eps_decay * eps)  # decrease epsilon
         print(
-            '\rEpisode {}  \tScore: {} / {:.2f}  \tAvg: {:.2f}  \tTile: {}  \teps: {:.3f}  \tstp: {}  \tmem: {}  '
-                .format(i_episode, env.score, score, np.mean(scores_window), env.max_tile, eps, t + 1,
-                        len(agent.memory)), end="")
+            '[yellow on default]Episode {}[/]  \tStp: {}  \tScore: {} / {:.0f} \tAvg: {:.2f}  \tTile: {}  \tEps: {:.3f}  \tmem: {}  '
+                .format(i_episode, t + 1, env.score, score, rolling_scores, env.max_tile, eps,
+                        len(agent.memory)), end="\r")
         if i_episode % 10 == 0:
             print("")
-    return scores
+
+        # Save trained parameters
+        if i_episode % 100 == 0:
+            torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')
+
+    return rolling_scores
 
 
 def train():
@@ -125,7 +135,7 @@ def train():
     agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
 
     # Execute training
-    scores = dqn(env, agent, n_episodes=5000, eps_decay=0.999, eps_start=0.1, eps_end=0.005)
+    scores = dqn(env, agent, n_episodes=20_000, eps_decay=0.999, eps_start=0.02, eps_end=0.01)
 
     # Save trained parameters
     torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')

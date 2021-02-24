@@ -6,16 +6,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 # DEFAULT PARAMETERS
-BUFFER_SIZE = int(2e5)  # replay buffer size
+BUFFER_SIZE = int(5e4)  # replay buffer size
 MINIMUM_BUFFER_ENTRIES = 10_000  # Minimum entries for learning
 BATCH_SIZE = 256  # minibatch size
 GAMMA = 0.99  # discount factor
-TAU = 1e-2  # for soft update of target parameters
-LR = 1e-3  # learning rate
+TAU = 1e-3  # for soft update of target parameters
+LR = 1e-5  # learning rate
 UPDATE_EVERY = 10  # how often to update the network
 DEFAULT_PRIORITY = 10_000.0  # priority for new experiences
 PRIORITY_EPS = 0.0001  # Epsilon to add to priorities
-PRIORITY_ETA = 2.0  # Exponent for priority
+PRIORITY_ETA = 1.0  # Exponent for priority
 PRIORITY_WEIGHT_BETA = 1.0  # Exponent for the priority importance loss scaling
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -60,9 +60,10 @@ class Agent:
         random.seed(seed)
 
         # Q-Network
-        self.qnetwork_local = network(state_size, action_size, seed).to(device)
-        self.qnetwork_target = network(state_size, action_size, seed).to(device)
+        self.qnetwork_local = network(action_size, seed).to(device)
+        self.qnetwork_target = network(action_size, seed).to(device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=lr)
+        # self.optimizer = optim.SGD(self.qnetwork_local.parameters(), lr=lr, momentum=0.1)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, buffer_size, batch_size, seed, default_priority, priority_eps,
@@ -90,7 +91,7 @@ class Agent:
             state (array_like): current state
             eps (float): epsilon, for epsilon-greedy action selection
         """
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        state = torch.from_numpy(state).unsqueeze(0).to(device)
         self.qnetwork_local.eval()
         with torch.no_grad():
             action_values = self.qnetwork_local(state)
@@ -124,7 +125,7 @@ class Agent:
 
         # Compute loss and scale it according to the priority weight
         # loss = F.mse_loss(q_expected, q_targets, reduce=False)
-        loss = F.mse_loss(q_expected, q_targets, reduction='none')
+        loss = F.smooth_l1_loss(q_expected, q_targets, reduction='none')
         loss /= (len(self.memory) * weights) ** self.priority_weight_beta
         loss = loss.mean()
 
