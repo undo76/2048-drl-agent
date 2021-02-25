@@ -6,17 +6,17 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 # DEFAULT PARAMETERS
-BUFFER_SIZE = int(5e4)  # replay buffer size
-MINIMUM_BUFFER_ENTRIES = 10_000  # Minimum entries for learning
-BATCH_SIZE = 256  # minibatch size
-GAMMA = 0.99  # discount factor
-TAU = 1e-3  # for soft update of target parameters
-LR = 1e-5  # learning rate
-UPDATE_EVERY = 10  # how often to update the network
+BUFFER_SIZE = int(1e5)  # replay buffer size
+MINIMUM_BUFFER_ENTRIES = 1_000  # Minimum entries for learning
+BATCH_SIZE = 512  # minibatch size
+GAMMA = 0.995  # discount factor
+ALPHA = 1e-3  # for soft update of target parameters
+LR = 1e-4  # learning rate
+UPDATE_EVERY = 4  # how often to update the network
 DEFAULT_PRIORITY = 10_000.0  # priority for new experiences
 PRIORITY_EPS = 0.0001  # Epsilon to add to priorities
-PRIORITY_ETA = 1.0  # Exponent for priority
-PRIORITY_WEIGHT_BETA = 1.0  # Exponent for the priority importance loss scaling
+PRIORITY_ETA = 1.  # Exponent for priority
+PRIORITY_WEIGHT_BETA = 1.  # Exponent for the priority importance loss scaling
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -25,7 +25,7 @@ class Agent:
     """Interacts with and learns from the environment."""
 
     def __init__(self, network, state_size, action_size, seed, batch_size=BATCH_SIZE, buffer_size=BUFFER_SIZE,
-                 gamma=GAMMA, tau=TAU, lr=LR,
+                 gamma=GAMMA, alpha=ALPHA, lr=LR,
                  update_every=UPDATE_EVERY, default_priority=DEFAULT_PRIORITY, priority_eps=PRIORITY_EPS,
                  priority_eta=PRIORITY_ETA, priority_weight_beta=PRIORITY_WEIGHT_BETA):
         """Initialize an Agent object.
@@ -38,7 +38,7 @@ class Agent:
             batch_size (int): minibatch size
             buffer_size (int): replay buffer size
             gamma (float): discount factor
-            tau (float): Polyak update of target parameters
+            alpha (float): Polyak update of target parameters
             lr (float): learning rate
             update_every (int): how often to update the network
             default_priority (float): priority for new experiences
@@ -50,7 +50,7 @@ class Agent:
         self.action_size = action_size
         self.batch_size = batch_size
         self.gamma = gamma
-        self.tau = tau
+        self.alpha = alpha
         self.lr = lr
         self.update_every = update_every
         self.default_priority = default_priority
@@ -96,6 +96,10 @@ class Agent:
         with torch.no_grad():
             action_values = self.qnetwork_local(state)
         self.qnetwork_local.train()
+
+        # Boltzmann action selection
+        # sample = torch.distributions.Categorical(F.softmax(action_values / eps, dim=1)).sample()
+        # return sample.squeeze().cpu().numpy()
 
         # Epsilon-greedy action selection
         if random.random() > eps:
@@ -149,10 +153,10 @@ class Agent:
         ======
             local_model (PyTorch model): weights will be copied from
             target_model (PyTorch model): weights will be copied to
-            tau (float): interpolation parameter 
+            alpha (float): interpolation parameter
         """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+            target_param.data.copy_(self.alpha * local_param.data + (1.0 - self.alpha) * target_param.data)
 
 
 class ReplayBuffer:

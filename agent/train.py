@@ -97,16 +97,16 @@ def dqn(env, agent, n_episodes=1000, max_t=10000, eps_start=1.0, eps_end=0.01, e
         t = 0
         for t in range(max_t):
             action = agent.act(state, eps)
-            env.step(action)  # send the action to the environment
-            next_state = env.state  # get the next state
-            reward = env.reward  # get the reward
+            env.step(action)
+            next_state = env.state
+            reward = env.reward
             done = env.done
             agent.step(state, action, reward, next_state, done)
             state = next_state
             score += reward
             if done:
                 break
-        rolling_scores = rolling_scores * 0.95 + score * 0.05
+        rolling_scores = rolling_scores * 0.95 + score * 0.05 if i_episode > 1 else score
         eps = max(eps_end, eps_decay * eps)  # decrease epsilon
         print(
             '[yellow on default]Episode {}[/]  \tStp: {}  \tScore: {} / {:.0f} \tAvg: {:.2f}  \tTile: {}  \tEps: {:.3f}  \tmem: {}  '
@@ -126,16 +126,14 @@ def train():
     env = Env()
     env.reset()
     state = env.state
-
-    # Create an agent
     agent = Agent(QNetwork, len(state), len(Env.ACTIONS), seed=42)
     print(agent.__dict__)
 
-    agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
-    agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
+    # Load trained parameters
+    # agent.qnetwork_local.load_state_dict(torch.load('checkpoint.pth'))
+    # agent.qnetwork_target.load_state_dict(torch.load('checkpoint.pth'))
 
-    # Execute training
-    scores = dqn(env, agent, n_episodes=20_000, eps_decay=0.999, eps_start=0.02, eps_end=0.01)
+    scores = dqn(env, agent, n_episodes=20_000, eps_decay=0.995, eps_start=1., eps_end=0.01)
 
     # Save trained parameters
     torch.save(agent.qnetwork_local.state_dict(), 'checkpoint.pth')

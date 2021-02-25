@@ -25,14 +25,13 @@ class SymmetricConv2d(nn.Module):
         s4 = F.conv2d(input, weight=w.flip(dims=(2, 3)), bias=self.bias, stride=self.stride, padding=self.padding)
 
         wt = w.permute(0, 1, 3, 2)
-        s1t = F.conv2d(input, weight=wt, bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
-        s2t = F.conv2d(input, weight=wt.flip(dims=(2,)), bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
-        s3t = F.conv2d(input, weight=wt.flip(dims=(3,)), bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
-        s4t = F.conv2d(input, weight=wt.flip(dims=(2, 3)), bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
+        rstride = tuple(reversed(self.stride))
+        rpadding = tuple(reversed(self.padding))
+        s1t = F.conv2d(input, weight=wt, bias=self.bias, stride=rstride,
+                       padding=rpadding)
+        s2t = F.conv2d(input, weight=wt.flip(dims=(2,)), bias=self.bias, stride=rstride, padding=rpadding)
+        s3t = F.conv2d(input, weight=wt.flip(dims=(3,)), bias=self.bias, stride=rstride, padding=rpadding)
+        s4t = F.conv2d(input, weight=wt.flip(dims=(2, 3)), bias=self.bias, stride=rstride, padding=rpadding)
 
         return torch.cat((s1, s2, s3, s4, s1t, s2t, s3t, s4t), dim=1)
 
@@ -52,13 +51,14 @@ class SymmetricRowConv2d(nn.Module):
     def forward(self, input):
         w = self.weight
         s1 = self.conv2d(input)
-        s2 = F.conv2d(input, weight=w.flip(dims=(2,)), bias=self.bias, stride=self.stride, padding=self.padding)
+        s2 = F.conv2d(input, weight=w.flip(dims=(3,)), bias=self.bias, stride=self.stride, padding=self.padding)
 
         wt = w.permute(0, 1, 3, 2)
-        s1t = F.conv2d(input, weight=wt, bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
-        s2t = F.conv2d(input, weight=wt.flip(dims=(3,)), bias=self.bias, stride=tuple(reversed(self.stride)),
-                       padding=tuple(reversed(self.padding)))
+
+        rstride = tuple(reversed(self.stride))
+        rpadding = tuple(reversed(self.padding))
+        s1t = F.conv2d(input, weight=wt, bias=self.bias, stride=rstride, padding=rpadding)
+        s2t = F.conv2d(input, weight=wt.flip(dims=(2,)), bias=self.bias, stride=rstride, padding=rpadding)
 
         return torch.cat((s1, s2, s1t.permute(0, 1, 3, 2), s2t.permute(0, 1, 3, 2)), dim=1)
 
@@ -83,25 +83,25 @@ class QNetwork(nn.Module):
 
         self.emb = nn.Embedding(16, 16, padding_idx=0)
 
-        self.cc1 = nn.Sequential(
-            SymmetricConv2d(nn.Conv2d(16, 16, kernel_size=3, padding=1)),
-            # nn.BatchNorm2d(16 * 8),
-            nn.ReLU(),
-            # nn.Dropout2d()
-        )
+        # self.cc1 = nn.Sequential(
+        #     SymmetricConv2d(nn.Conv2d(16, 16, kernel_size=7, padding=3)),
+        #     # nn.BatchNorm2d(16 * 8),
+        #     nn.ReLU(),
+        #     nn.Dropout2d(p=0.2)
+        # )
         # self.cc2 = SymmetricConv2d(nn.Conv2d(64, 16, 4))
         self.cc3 = nn.Sequential(
-            SymmetricConv2d(nn.Conv2d(16 * 8, 16, 4)),
-            # nn.BatchNorm2d(16 * 8),
+            SymmetricConv2d(nn.Conv2d(16, 16, kernel_size=4)),
+            nn.BatchNorm2d(16 * 8),
             nn.ReLU(),
-            # nn.Dropout2d()
+            nn.Dropout2d(p=0.2)
         )
 
         self.cc_rows = nn.Sequential(
-            SymmetricRowConv2d(nn.Conv2d(16, 16, (1, 4))),
-            # nn.BatchNorm2d(32),
+            SymmetricRowConv2d(nn.Conv2d(16, 16, kernel_size=(1, 4))),
+            nn.BatchNorm2d(16 * 4),
             nn.ReLU(),
-            # nn.Dropout2d()
+            nn.Dropout2d(p=0.2)
         )
         # self.cc_cols = nn.Sequential(
         #     nn.Conv2d(16, 32, (4, 1)),
@@ -115,7 +115,7 @@ class QNetwork(nn.Module):
             nn.Linear(384, 384),
             nn.BatchNorm1d(384),
             nn.ReLU(),
-            nn.Dropout(p=0.1)
+            nn.Dropout(p=0.2)
         )
 
         # Duel network - V stream
@@ -123,7 +123,7 @@ class QNetwork(nn.Module):
             nn.Linear(384, v1_units),
             nn.BatchNorm1d(v1_units),
             nn.ReLU(),
-            nn.Dropout(p=0.1)
+            nn.Dropout(p=0.2)
         )
         self.v2 = nn.Sequential(
             nn.Linear(v1_units, v2_units),
@@ -137,7 +137,7 @@ class QNetwork(nn.Module):
             nn.Linear(384, a1_units),
             nn.BatchNorm1d(a1_units),
             nn.ReLU(),
-            nn.Dropout(p=0.1)
+            nn.Dropout(p=0.2)
         )
         self.a2 = nn.Sequential(
             nn.Linear(a1_units, a2_units),
@@ -151,8 +151,8 @@ class QNetwork(nn.Module):
 
         emb = self.emb(state.to(torch.long)).permute(0, 3, 1, 2)
 
-        cc1 = self.cc1(emb)
-        cc3 = self.cc3(cc1)
+        # cc1 = self.cc1(emb)
+        cc3 = self.cc3(emb)
 
         cc_rows = self.cc_rows(emb)
 
@@ -165,6 +165,7 @@ class QNetwork(nn.Module):
         v2 = self.v2(v1)
         v3 = self.v3(v2)
 
+        # a1 = self.a1(torch.cat((emb.flatten(1), fc1), dim=1))
         a1 = self.a1(fc1)
         a2 = self.a2(a1)
         a3 = self.a3(a2)
