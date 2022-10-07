@@ -170,8 +170,4 @@ class QNetwork(nn.Module):
         a2 = self.a2(a1)
         a3 = self.a3(a2)
 
-        # Use the mean in order to keep the identity of the branches
-        # as in formula (9) of https://arxiv.org/pdf/1511.06581.pdf
-        q = v3 + (a3 - a3.mean(dim=1, keepdim=True))
-
-        return q
+        return v3 + (a3 - a3.mean(dim=1, keepdim=True))

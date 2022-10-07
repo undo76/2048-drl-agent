@@ -43,10 +43,7 @@ class Env:
         """Penalize forbidden moves with -1"""
         if self.done:
             return -10
-        if self.invalid:
-            return -1
-        else:
-            return self.delta_score
+        return -1 if self.invalid else self.delta_score
 
     @property
     def done(self):

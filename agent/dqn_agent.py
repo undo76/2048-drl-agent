@@ -77,11 +77,13 @@ class Agent:
 
         # Learn every `update_every` time steps.
         self.t_step = (self.t_step + 1) % self.update_every
-        if self.t_step == 0:
-            # If enough samples are available in memory, get random subset and learn
-            if len(self.memory) > self.batch_size and len(self.memory) > MINIMUM_BUFFER_ENTRIES:
-                experiences = self.memory.sample()
-                self.learn(experiences, self.gamma)
+        if (
+            self.t_step == 0
+            and len(self.memory) > self.batch_size
+            and len(self.memory) > MINIMUM_BUFFER_ENTRIES
+        ):
+            experiences = self.memory.sample()
+            self.learn(experiences, self.gamma)
 
     def act(self, state, eps=0.):
         """Returns actions for given state as per current policy.
